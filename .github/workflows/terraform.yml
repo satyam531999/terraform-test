@@ -25,6 +25,7 @@ on:
         options:
           - plan
           - apply
+          - destroy
       target_env:
         description: "Target environment"
         required: true
@@ -34,6 +35,10 @@ on:
           - prod
       confirm_apply:
         description: "Type apply-dev or apply-prod to confirm apply"
+        required: false
+        type: string
+      confirm_destroy:
+        description: "Type destroy-dev or destroy-prod to confirm destroy"
         required: false
         type: string
 
@@ -228,3 +233,42 @@ jobs:
         with:
           name: apply-${{ inputs.target_env }}-plan
           path: environments/${{ inputs.target_env }}/applied-plan.txt
+
+  manual_destroy:
+    if: github.event_name == 'workflow_dispatch' && inputs.action == 'destroy' && inputs.confirm_destroy == format('destroy-{0}', inputs.target_env)
+    name: Manual Destroy (${{ inputs.target_env }})
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target_env }}
+    defaults:
+      run:
+        working-directory: environments/${{ inputs.target_env }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Generate backend.hcl
+        run: |
+          cat > backend.hcl << EOF
+          bucket         = "${{ secrets.TF_STATE_BUCKET }}"
+          key            = "terraform/aws-prod-lab/${{ inputs.target_env }}/terraform.tfstate"
+          region         = "${{ secrets.AWS_REGION }}"
+          dynamodb_table = "${{ secrets.TF_LOCK_TABLE }}"
+          encrypt        = true
+          EOF
+
+      - name: Terraform Init (Remote Backend)
+        run: terraform init -backend-config=backend.hcl -reconfigure
+
+      - name: Terraform Destroy
+        run: terraform destroy -input=false -auto-approve
