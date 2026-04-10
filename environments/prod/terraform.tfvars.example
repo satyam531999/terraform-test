@@ -1,0 +1,10 @@
+aws_region                  = "us-east-1"
+name_prefix                 = "prodlab-prod"
+desired_count               = 2
+container_image             = "public.ecr.aws/nginx/nginx:latest"
+
+# Dynatrace integration values
+dynatrace_aws_account_arn   = "arn:aws:iam::<dynatrace-account-id>:root"
+dynatrace_external_id       = "replace-with-dynatrace-external-id"
+dynatrace_api_url           = "https://<your-env>.live.dynatrace.com/api"
+dynatrace_api_token         = ""

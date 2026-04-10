@@ -1,0 +1,9 @@
+{
+"enabled_features": {
+"new_ui": true,
+"beta_api": false
+},
+"rollout": {
+"percentage": 20
+}
+}
