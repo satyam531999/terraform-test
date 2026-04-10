@@ -1,6 +1,15 @@
 name: Terraform CI CD
 
 on:
+  push:
+    branches:
+      - main
+      - feature/**
+    paths:
+      - "**/*.tf"
+      - "**/*.tfvars"
+      - "**/*.hcl"
+      - ".github/workflows/terraform.yml"
   pull_request:
     paths:
       - "**/*.tf"
@@ -32,10 +41,17 @@ permissions:
   contents: read
   id-token: write
 
+concurrency:
+  group: terraform-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TERRAFORM_VERSION: 1.7.5
+
 jobs:
-  pr_checks:
-    if: github.event_name == 'pull_request'
-    name: PR Validate and Plan (${{ matrix.env_dir }})
+  ci_checks:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    name: CI Validate and Plan (${{ matrix.env_dir }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -43,7 +59,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: terraform-aws-prod-lab/${{ matrix.env_dir }}
+        working-directory: ${{ matrix.env_dir }}
 
     steps:
       - name: Checkout
@@ -52,10 +68,11 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.7.5
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
 
       - name: Terraform Fmt Check
-        run: terraform fmt -check -recursive ../../
+        working-directory: .
+        run: terraform fmt -check -recursive .
 
       - name: Terraform Init
         run: terraform init -backend=false
@@ -72,11 +89,11 @@ jobs:
       - name: Upload Plan Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pr-${{ matrix.env_dir }}-tfplan
-          path: terraform-aws-prod-lab/${{ matrix.env_dir }}/tfplan.txt
+          name: ci-${{ matrix.env_dir }}-tfplan
+          path: ${{ matrix.env_dir }}/tfplan.txt
 
   security_scan:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     name: Security Scan (tfsec)
     runs-on: ubuntu-latest
     steps:
@@ -86,7 +103,7 @@ jobs:
       - name: Run tfsec
         uses: aquasecurity/tfsec-action@v1.0.3
         with:
-          working_directory: terraform-aws-prod-lab
+          working_directory: .
 
   manual_plan:
     if: github.event_name == 'workflow_dispatch' && inputs.action == 'plan'
@@ -95,7 +112,7 @@ jobs:
     environment: ${{ inputs.target_env }}
     defaults:
       run:
-        working-directory: terraform-aws-prod-lab/environments/${{ inputs.target_env }}
+        working-directory: environments/${{ inputs.target_env }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -103,7 +120,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.7.5
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
 
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -134,7 +151,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: manual-${{ inputs.target_env }}-tfplan
-          path: terraform-aws-prod-lab/environments/${{ inputs.target_env }}/tfplan.txt
+          path: environments/${{ inputs.target_env }}/tfplan.txt
 
   manual_apply:
     if: github.event_name == 'workflow_dispatch' && inputs.action == 'apply' && inputs.confirm_apply == format('apply-{0}', inputs.target_env)
@@ -143,7 +160,7 @@ jobs:
     environment: ${{ inputs.target_env }}
     defaults:
       run:
-        working-directory: terraform-aws-prod-lab/environments/${{ inputs.target_env }}
+        working-directory: environments/${{ inputs.target_env }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -151,7 +168,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.7.5
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
 
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -185,4 +202,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: apply-${{ inputs.target_env }}-plan
-          path: terraform-aws-prod-lab/environments/${{ inputs.target_env }}/applied-plan.txt
+          path: environments/${{ inputs.target_env }}/applied-plan.txt
