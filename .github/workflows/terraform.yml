@@ -80,6 +80,56 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
 
+  pr_plan:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    name: PR Plan (${{ matrix.target_env }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target_env: ["dev", "prod"]
+    defaults:
+      run:
+        working-directory: environments/${{ matrix.target_env }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Generate backend.hcl
+        run: |
+          cat > backend.hcl << EOF
+          bucket         = "${{ secrets.TF_STATE_BUCKET }}"
+          key            = "terraform/aws-prod-lab/${{ matrix.target_env }}/terraform.tfstate"
+          region         = "${{ secrets.AWS_REGION }}"
+          dynamodb_table = "${{ secrets.TF_LOCK_TABLE }}"
+          encrypt        = true
+          EOF
+
+      - name: Terraform Init (Remote Backend)
+        run: terraform init -backend-config=backend.hcl -reconfigure
+
+      - name: Terraform Plan (Remote State)
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Export Plan Text
+        run: terraform show -no-color tfplan > tfplan.txt
+
+      - name: Upload PR Plan Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-${{ matrix.target_env }}-tfplan
+          path: environments/${{ matrix.target_env }}/tfplan.txt
+
   manual_plan:
     if: github.event_name == 'workflow_dispatch' && inputs.action == 'plan'
     name: Manual Plan (${{ inputs.target_env }})
