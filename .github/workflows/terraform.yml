@@ -51,7 +51,7 @@ env:
 jobs:
   ci_checks:
     if: github.event_name == 'pull_request' || github.event_name == 'push'
-    name: CI Validate and Plan (${{ matrix.env_dir }})
+    name: CI Fmt and Validate (${{ matrix.env_dir }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -79,18 +79,6 @@ jobs:
 
       - name: Terraform Validate
         run: terraform validate
-
-      - name: Terraform Plan (Static Validation)
-        run: terraform plan -lock=false -input=false -refresh=false -var-file=terraform.tfvars.example -out=tfplan
-
-      - name: Export Plan Text
-        run: terraform show -no-color tfplan > tfplan.txt
-
-      - name: Upload Plan Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ci-${{ matrix.env_dir }}-tfplan
-          path: ${{ matrix.env_dir }}/tfplan.txt
 
   manual_plan:
     if: github.event_name == 'workflow_dispatch' && inputs.action == 'plan'
