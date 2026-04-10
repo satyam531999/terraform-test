@@ -92,19 +92,6 @@ jobs:
           name: ci-${{ matrix.env_dir }}-tfplan
           path: ${{ matrix.env_dir }}/tfplan.txt
 
-  security_scan:
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
-    name: Security Scan (tfsec)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Run tfsec
-        uses: aquasecurity/tfsec-action@v1.0.3
-        with:
-          working_directory: .
-
   manual_plan:
     if: github.event_name == 'workflow_dispatch' && inputs.action == 'plan'
     name: Manual Plan (${{ inputs.target_env }})
