@@ -132,6 +132,38 @@ The role in `AWS_ROLE_TO_ASSUME` should trust GitHub OIDC and allow Terraform ac
 3. Review uploaded plan artifact.
 4. Re-run with `action=apply`, same `target_env`, and `confirm_apply=apply-<env>`.
 
+## Spinnaker Delivery Model
+
+Use GitHub Actions for infrastructure CI/CD and use Spinnaker for application delivery.
+
+Recommended split:
+
+- Terraform + GitHub Actions:
+	- `terraform fmt`
+	- `terraform validate`
+	- `terraform plan`
+	- `tfsec` security scanning
+	- manual `apply` to `dev` or `prod`
+- Spinnaker:
+	- deploy new ECS application versions
+	- promote releases from `dev` to `prod`
+	- run manual approval before production rollout
+	- roll back on failed health checks
+
+Why this split works well:
+
+- Terraform remains the source of truth for infrastructure state
+- Spinnaker handles release orchestration better than raw Terraform applies
+- AppConfig and CloudWatch alarms continue to provide rollout guardrails
+
+Suggested rollout path:
+
+1. Provision infrastructure with Terraform.
+2. Build and publish container image to ECR.
+3. Trigger Spinnaker pipeline for ECS deployment.
+4. Verify ALB health and CloudWatch alarms.
+5. Promote to production with approval.
+
 ## Demo Walkthrough (Short)
 
 Use this sequence during demo to validate that infrastructure is not only created, but usable and rollout-safe.

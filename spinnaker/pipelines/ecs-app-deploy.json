@@ -1,0 +1,66 @@
+{
+  "application": "terraform-aws-prod-lab",
+  "name": "ecs-dev-deploy",
+  "description": "Starter Spinnaker pipeline for ECS deployment into the Terraform-provisioned dev environment.",
+  "keepWaitingPipelines": false,
+  "limitConcurrent": true,
+  "parameterConfig": [
+    {
+      "name": "image",
+      "label": "Container image",
+      "description": "Full ECR image reference to deploy",
+      "required": true,
+      "default": "<aws-account-id>.dkr.ecr.us-east-1.amazonaws.com/app:latest"
+    },
+    {
+      "name": "environment",
+      "label": "Environment",
+      "description": "Deployment target",
+      "required": true,
+      "default": "dev"
+    }
+  ],
+  "stages": [
+    {
+      "refId": "1",
+      "requisiteStageRefIds": [],
+      "type": "checkPreconditions",
+      "name": "Validate input",
+      "preconditions": [
+        {
+          "type": "expression",
+          "context": {
+            "expression": "${ parameters['environment'] == 'dev' || parameters['environment'] == 'prod' }"
+          }
+        }
+      ]
+    },
+    {
+      "refId": "2",
+      "requisiteStageRefIds": [
+        "1"
+      ],
+      "type": "deployManifest",
+      "name": "Deploy ECS service revision",
+      "account": "aws-account",
+      "cloudProvider": "ecs",
+      "source": "text",
+      "manifest": {
+        "serviceName": "${ parameters['environment'] == 'dev' ? 'prodlab-dev-service' : 'prodlab-prod-service' }",
+        "clusterName": "${ parameters['environment'] == 'dev' ? 'prodlab-dev-cluster' : 'prodlab-prod-cluster' }",
+        "image": "${ parameters['image'] }"
+      }
+    },
+    {
+      "refId": "3",
+      "requisiteStageRefIds": [
+        "2"
+      ],
+      "type": "manualJudgment",
+      "name": "Approve promotion",
+      "instructions": "Review ECS service health, ALB endpoint, and CloudWatch alarms before promoting beyond dev.",
+      "judgmentInputs": []
+    }
+  ],
+  "triggers": []
+}

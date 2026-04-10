@@ -27,14 +27,14 @@ module "compute" {
 module "telemetry" {
   source = "../../modules/telemetry"
 
-  name_prefix              = var.name_prefix
-  aws_region               = var.aws_region
-  alb_arn_suffix           = module.compute.alb_arn_suffix
-  target_group_arn_suffix  = module.compute.target_group_arn_suffix
-  alb_5xx_threshold        = var.alb_5xx_threshold
+  name_prefix                   = var.name_prefix
+  aws_region                    = var.aws_region
+  alb_arn_suffix                = module.compute.alb_arn_suffix
+  target_group_arn_suffix       = module.compute.target_group_arn_suffix
+  alb_5xx_threshold             = var.alb_5xx_threshold
   alb_latency_threshold_seconds = var.alb_latency_threshold_seconds
-  notification_topic_arn   = var.notification_topic_arn
-  tags                     = var.tags
+  notification_topic_arn        = var.notification_topic_arn
+  tags                          = var.tags
 }
 
 module "rollout" {

@@ -1,6 +1,15 @@
 name: Terraform CI CD
 
 on:
+  push:
+    branches:
+      - main
+      - feature/**
+    paths:
+      - "**/*.tf"
+      - "**/*.tfvars"
+      - "**/*.hcl"
+      - ".github/workflows/terraform.yml"
   pull_request:
     paths:
       - "**/*.tf"
@@ -32,10 +41,17 @@ permissions:
   contents: read
   id-token: write
 
+concurrency:
+  group: terraform-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TERRAFORM_VERSION: 1.7.5
+
 jobs:
-  pr_checks:
-    if: github.event_name == 'pull_request'
-    name: PR Validate and Plan (${{ matrix.env_dir }})
+  ci_checks:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    name: CI Fmt and Validate (${{ matrix.env_dir }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -43,7 +59,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: terraform-aws-prod-lab/${{ matrix.env_dir }}
+        working-directory: ${{ matrix.env_dir }}
 
     steps:
       - name: Checkout
@@ -52,10 +68,11 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.7.5
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
 
       - name: Terraform Fmt Check
-        run: terraform fmt -check -recursive ../../
+        working-directory: .
+        run: terraform fmt -check -recursive .
 
       - name: Terraform Init
         run: terraform init -backend=false
@@ -63,30 +80,55 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
 
-      - name: Terraform Plan (Static Validation)
-        run: terraform plan -lock=false -input=false -refresh=false -var-file=terraform.tfvars.example -out=tfplan
-
-      - name: Export Plan Text
-        run: terraform show -no-color tfplan > tfplan.txt
-
-      - name: Upload Plan Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr-${{ matrix.env_dir }}-tfplan
-          path: terraform-aws-prod-lab/${{ matrix.env_dir }}/tfplan.txt
-
-  security_scan:
-    if: github.event_name == 'pull_request'
-    name: Security Scan (tfsec)
+  pr_plan:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    name: PR Plan (${{ matrix.target_env }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target_env: ["dev", "prod"]
+    defaults:
+      run:
+        working-directory: environments/${{ matrix.target_env }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run tfsec
-        uses: aquasecurity/tfsec-action@v1.0.3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
-          working_directory: terraform-aws-prod-lab
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Generate backend.hcl
+        run: |
+          cat > backend.hcl << EOF
+          bucket         = "${{ secrets.TF_STATE_BUCKET }}"
+          key            = "terraform/aws-prod-lab/${{ matrix.target_env }}/terraform.tfstate"
+          region         = "${{ secrets.AWS_REGION }}"
+          dynamodb_table = "${{ secrets.TF_LOCK_TABLE }}"
+          encrypt        = true
+          EOF
+
+      - name: Terraform Init (Remote Backend)
+        run: terraform init -backend-config=backend.hcl -reconfigure
+
+      - name: Terraform Plan (Remote State)
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Export Plan Text
+        run: terraform show -no-color tfplan > tfplan.txt
+
+      - name: Upload PR Plan Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-${{ matrix.target_env }}-tfplan
+          path: environments/${{ matrix.target_env }}/tfplan.txt
 
   manual_plan:
     if: github.event_name == 'workflow_dispatch' && inputs.action == 'plan'
@@ -95,7 +137,7 @@ jobs:
     environment: ${{ inputs.target_env }}
     defaults:
       run:
-        working-directory: terraform-aws-prod-lab/environments/${{ inputs.target_env }}
+        working-directory: environments/${{ inputs.target_env }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -103,7 +145,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.7.5
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
 
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -134,7 +176,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: manual-${{ inputs.target_env }}-tfplan
-          path: terraform-aws-prod-lab/environments/${{ inputs.target_env }}/tfplan.txt
+          path: environments/${{ inputs.target_env }}/tfplan.txt
 
   manual_apply:
     if: github.event_name == 'workflow_dispatch' && inputs.action == 'apply' && inputs.confirm_apply == format('apply-{0}', inputs.target_env)
@@ -143,7 +185,7 @@ jobs:
     environment: ${{ inputs.target_env }}
     defaults:
       run:
-        working-directory: terraform-aws-prod-lab/environments/${{ inputs.target_env }}
+        working-directory: environments/${{ inputs.target_env }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -151,7 +193,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.7.5
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
 
       - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -185,4 +227,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: apply-${{ inputs.target_env }}-plan
-          path: terraform-aws-prod-lab/environments/${{ inputs.target_env }}/applied-plan.txt
+          path: environments/${{ inputs.target_env }}/applied-plan.txt
