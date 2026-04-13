@@ -142,6 +142,7 @@ jobs:
           IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
           aws ecr describe-images --repository-name "$ECR_REPOSITORY" --image-ids imageTag="$IMAGE_TAG" --region "$AWS_REGION" >/dev/null
           echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
 
       - name: Generate Backend Config
         run: |
@@ -174,3 +175,26 @@ jobs:
         with:
           name: dev-image-rollout-plan
           path: environments/dev/applied-plan.txt
+
+      - name: Verify Dev Health Endpoint
+        env:
+          EXPECTED_APP_VERSION: ${{ steps.resolve_image.outputs.image_tag }}
+        run: |
+          ALB_DNS=$(terraform output -raw alb_dns_name)
+
+          for attempt in $(seq 1 20); do
+            RESPONSE=$(curl -fsS "http://$ALB_DNS/health") && STATUS=0 || STATUS=$?
+
+            if [ "$STATUS" -eq 0 ]; then
+              echo "$RESPONSE"
+
+              if echo "$RESPONSE" | grep -q "\"appVersion\":\"$EXPECTED_APP_VERSION\""; then
+                exit 0
+              fi
+            fi
+
+            sleep 15
+          done
+
+          echo "Timed out waiting for dev rollout to serve appVersion=$EXPECTED_APP_VERSION"
+          exit 1
