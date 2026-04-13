@@ -130,6 +130,19 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ secrets.AWS_REGION || env.AWS_REGION }}
 
+      - name: Resolve Published Image URI
+        id: resolve_image
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION || env.AWS_REGION }}
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          APP_VERSION=$(node -p "require('../../app/package.json').version")
+          SHORT_SHA=$(printf '%.7s' "$GITHUB_SHA")
+          IMAGE_TAG="${APP_VERSION}-${SHORT_SHA}"
+          IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          aws ecr describe-images --repository-name "$ECR_REPOSITORY" --image-ids imageTag="$IMAGE_TAG" --region "$AWS_REGION" >/dev/null
+          echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+
       - name: Generate Backend Config
         run: |
           cat > backend.hcl << EOF
@@ -145,8 +158,10 @@ jobs:
 
       - name: Terraform Plan Dev Image Rollout
         env:
-          IMAGE_URI: ${{ needs.publish_image.outputs.image_uri }}
-        run: terraform plan -input=false -out=tfplan -var="container_image=${IMAGE_URI}"
+          IMAGE_URI: ${{ steps.resolve_image.outputs.image_uri }}
+        run: |
+          test -n "$IMAGE_URI"
+          terraform plan -input=false -out=tfplan -var="container_image=${IMAGE_URI}"
 
       - name: Terraform Apply Dev Image Rollout
         run: terraform apply -input=false -auto-approve tfplan
