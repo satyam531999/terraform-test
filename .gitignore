@@ -6,6 +6,7 @@ crash.log
 *.tfvars
 *.tfplan
 **/backend.hcl
+app/node_modules/
 environments/dev/feature-flags.json
 environments/dev/flags-v2.json
 environments/prod/flags-prod-v2.json

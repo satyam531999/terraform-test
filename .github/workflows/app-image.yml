@@ -1,0 +1,109 @@
+name: App Image CI
+
+on:
+  push:
+    branches:
+      - main
+      - feature/**
+    paths:
+      - app/**
+      - .github/workflows/app-image.yml
+  pull_request:
+    paths:
+      - app/**
+      - .github/workflows/app-image.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: observable-demo-app
+
+jobs:
+  app_checks:
+    name: App Install and Build Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Verify Server Syntax
+        run: node --check server.js
+
+      - name: Build Docker Image Locally
+        run: docker build -t observable-demo-app:ci .
+
+  publish_image:
+    if: github.event_name != 'pull_request'
+    name: Publish Image to ECR
+    runs-on: ubuntu-latest
+    needs: app_checks
+    outputs:
+      image_uri: ${{ steps.export_image.outputs.image_uri }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compute Image Tag
+        id: compute_tag
+        run: |
+          APP_VERSION=$(node -p "require('./app/package.json').version")
+          SHORT_SHA=$(printf '%.7s' "$GITHUB_SHA")
+          echo "image_tag=${APP_VERSION}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION || env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login_ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Ensure ECR Repository Exists
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION || env.AWS_REGION }}
+        run: |
+          aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" --region "$AWS_REGION" >/dev/null 2>&1 || \
+          aws ecr create-repository --repository-name "$ECR_REPOSITORY" --region "$AWS_REGION"
+
+      - name: Build and Push Image
+        working-directory: app
+        env:
+          REGISTRY: ${{ steps.login_ecr.outputs.registry }}
+          IMAGE_TAG: ${{ steps.compute_tag.outputs.image_tag }}
+        run: |
+          IMAGE_URI="$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker build -t "$IMAGE_URI" .
+          docker push "$IMAGE_URI"
+          echo "IMAGE_URI=$IMAGE_URI" >> "$GITHUB_ENV"
+
+      - name: Export Image URI
+        id: export_image
+        run: echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Image Metadata
+        run: printf '%s\n' "$IMAGE_URI" > image-uri.txt
+
+      - name: Publish Image Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-uri
+          path: image-uri.txt

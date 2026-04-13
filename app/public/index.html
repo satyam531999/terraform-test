@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>__APP_NAME__</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1d2935;
+      --paper: rgba(255, 255, 255, 0.9);
+      --accent: #9a3412;
+      --accent-soft: #fed7aa;
+      --background-a: #f5efe6;
+      --background-b: #dbeafe;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(154, 52, 18, 0.18), transparent 28%),
+        linear-gradient(135deg, var(--background-a), var(--background-b));
+      display: grid;
+      place-items: center;
+      padding: 32px;
+    }
+
+    .card {
+      width: min(760px, 100%);
+      background: var(--paper);
+      border: 1px solid rgba(29, 41, 53, 0.08);
+      border-radius: 22px;
+      padding: 28px;
+      box-shadow: 0 24px 60px rgba(29, 41, 53, 0.12);
+      backdrop-filter: blur(10px);
+    }
+
+    .eyebrow {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 0.82rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 16px 0 8px;
+      font-size: clamp(2rem, 6vw, 3.3rem);
+      line-height: 1;
+    }
+
+    p {
+      line-height: 1.7;
+      margin: 0 0 14px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin: 24px 0;
+    }
+
+    .panel {
+      padding: 16px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(29, 41, 53, 0.08);
+    }
+
+    .panel strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--accent);
+    }
+
+    code {
+      font-family: Consolas, "Courier New", monospace;
+      background: rgba(29, 41, 53, 0.06);
+      border-radius: 6px;
+      padding: 2px 6px;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 18px;
+      line-height: 1.9;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <span class="eyebrow">Observable Demo Service</span>
+    <h1>__APP_NAME__</h1>
+    <p>This container is designed for ECS, ALB, CloudWatch, GitHub Actions, Spinnaker, and future Dynatrace instrumentation.</p>
+
+    <section class="grid">
+      <article class="panel">
+        <strong>Environment</strong>
+        <div>__APP_ENV__</div>
+      </article>
+      <article class="panel">
+        <strong>Version</strong>
+        <div>__APP_VERSION__</div>
+      </article>
+      <article class="panel">
+        <strong>Hostname</strong>
+        <div>__HOSTNAME__</div>
+      </article>
+      <article class="panel">
+        <strong>Rendered At</strong>
+        <div>__TIMESTAMP__</div>
+      </article>
+    </section>
+
+    <p>Useful endpoints for monitoring demos:</p>
+    <ul>
+      <li><code>/health</code> for load balancer checks</li>
+      <li><code>/api/demo</code> for normal traffic</li>
+      <li><code>/api/slow?delay=2000</code> for latency</li>
+      <li><code>/api/error?code=500</code> for controlled failures</li>
+      <li><code>/api/log-demo</code> for structured logs</li>
+    </ul>
+  </main>
+</body>
+</html>

@@ -10,6 +10,7 @@ This repository is a practical starter kit to learn production-grade Terraform o
 ## Repository Structure
 
 - `bootstrap/`: Creates remote Terraform state backend (S3 + DynamoDB lock table)
+- `app/`: Observable demo application source code and container build context
 - `environments/dev/`: Development environment stack
 - `environments/prod/`: Production environment stack
 - `modules/network/`: VPC, subnets, routing, NAT
@@ -79,6 +80,7 @@ This lab provisions AppConfig rollout components. For hands-on rollout exercises
 3. Tighten IAM policy scope in Dynatrace module.
 4. Add SNS topic and wire alarm notifications.
 5. Add CI checks in your own Git provider using `.github/workflows/terraform.yml` as reference.
+6. Build and publish the observable app image using `.github/workflows/app-image.yml`.
 
 ## Safety Notes
 
@@ -90,6 +92,8 @@ This lab provisions AppConfig rollout components. For hands-on rollout exercises
 ## CI/CD Pipeline
 
 Workflow file: `.github/workflows/terraform.yml`
+
+Application image workflow: `.github/workflows/app-image.yml`
 
 ### What It Does
 
@@ -113,6 +117,23 @@ Set these repository secrets:
 - `AWS_REGION`: e.g. `us-east-1`
 - `TF_STATE_BUCKET`: S3 backend bucket name
 - `TF_LOCK_TABLE`: DynamoDB lock table name
+
+The application image workflow publishes to the `observable-demo-app` ECR repository and will create that repository automatically if it does not exist.
+
+## Observable Demo App
+
+The `app/` directory contains a small Express service intentionally shaped for monitoring and rollout demonstrations.
+
+Endpoints:
+
+- `/`: HTML landing page with app name, environment, version, hostname, and render time
+- `/health`: lightweight health endpoint for ALB checks
+- `/api/demo`: normal JSON response path
+- `/api/slow?delay=2000`: controlled latency generator
+- `/api/error?code=500`: controlled failure generator
+- `/api/log-demo`: structured log emitter
+
+This gives you useful signals today in ALB metrics and CloudWatch logs, and later in Dynatrace when instrumentation is added.
 
 ### Recommended GitHub Environments
 
