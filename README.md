@@ -120,6 +120,8 @@ Set these repository secrets:
 
 The application image workflow publishes to the `observable-demo-app` ECR repository and will create that repository automatically if it does not exist.
 
+On branch pushes and manual runs, the same workflow also deploys the newly published immutable image into `dev` by running Terraform with a `container_image` override. This removes the need to manually edit `terraform.tfvars` for every app change while keeping `prod` under manual control.
+
 ## Observable Demo App
 
 The `app/` directory contains a small Express service intentionally shaped for monitoring and rollout demonstrations.

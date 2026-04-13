@@ -21,6 +21,7 @@ permissions:
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: observable-demo-app
+  TERRAFORM_VERSION: 1.7.5
 
 jobs:
   app_checks:
@@ -107,3 +108,57 @@ jobs:
         with:
           name: image-uri
           path: image-uri.txt
+
+  deploy_dev:
+    if: github.event_name != 'pull_request'
+    name: Deploy Image to Dev
+    runs-on: ubuntu-latest
+    environment: dev
+    needs: publish_image
+    defaults:
+      run:
+        working-directory: environments/dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION || env.AWS_REGION }}
+
+      - name: Generate Backend Config
+        run: |
+          cat > backend.hcl << EOF
+          bucket         = "${{ secrets.TF_STATE_BUCKET }}"
+          key            = "terraform/aws-prod-lab/dev/terraform.tfstate"
+          region         = "${{ secrets.AWS_REGION || env.AWS_REGION }}"
+          dynamodb_table = "${{ secrets.TF_LOCK_TABLE }}"
+          encrypt        = true
+          EOF
+
+      - name: Terraform Init
+        run: terraform init -backend-config=backend.hcl -reconfigure
+
+      - name: Terraform Plan Dev Image Rollout
+        env:
+          IMAGE_URI: ${{ needs.publish_image.outputs.image_uri }}
+        run: terraform plan -input=false -out=tfplan -var="container_image=${IMAGE_URI}"
+
+      - name: Terraform Apply Dev Image Rollout
+        run: terraform apply -input=false -auto-approve tfplan
+
+      - name: Export Applied Plan Text
+        run: terraform show -no-color tfplan > applied-plan.txt
+
+      - name: Upload Dev Deploy Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-image-rollout-plan
+          path: environments/dev/applied-plan.txt
