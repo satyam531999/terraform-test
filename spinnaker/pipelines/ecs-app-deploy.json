@@ -10,7 +10,7 @@
       "label": "Container image",
       "description": "Full ECR image reference to deploy",
       "required": true,
-      "default": "<aws-account-id>.dkr.ecr.us-east-1.amazonaws.com/app:latest"
+      "default": "<aws-account-id>.dkr.ecr.us-east-1.amazonaws.com/observable-demo-app:<version>-<sha>"
     },
     {
       "name": "environment",
@@ -62,5 +62,12 @@
       "judgmentInputs": []
     }
   ],
-  "triggers": []
+  "triggers": [
+    {
+      "enabled": true,
+      "type": "webhook",
+      "source": "github-actions-app-image",
+      "payloadConstraints": {}
+    }
+  ]
 }

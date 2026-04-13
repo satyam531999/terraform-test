@@ -122,6 +122,8 @@ The application image workflow publishes to the `observable-demo-app` ECR reposi
 
 On branch pushes and manual runs, the same workflow also deploys the newly published immutable image into `dev` by running Terraform with a `container_image` override. This removes the need to manually edit `terraform.tfvars` for every app change while keeping `prod` under manual control.
 
+If the GitHub secret `SPINNAKER_WEBHOOK_URL` is configured, the app workflow switches to a Spinnaker handoff model for `dev`: it publishes the image, sends the image metadata to Spinnaker via webhook, and skips the Terraform-based `deploy_dev` fallback.
+
 ## Observable Demo App
 
 The `app/` directory contains a small Express service intentionally shaped for monitoring and rollout demonstrations.
