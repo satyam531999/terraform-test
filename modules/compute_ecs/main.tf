@@ -5,6 +5,12 @@ resource "aws_cloudwatch_log_group" "app" {
   tags = var.tags
 }
 
+locals {
+  image_reference = element(reverse(split("/", var.container_image)), 0)
+  app_version     = try(element(split(":", local.image_reference), 1), "latest")
+  app_env         = lookup(var.tags, "env", var.name_prefix)
+}
+
 resource "aws_security_group" "alb" {
   name        = "${var.name_prefix}-alb-sg"
   description = "Allow HTTP inbound"
@@ -67,7 +73,7 @@ resource "aws_lb_target_group" "app" {
   vpc_id      = var.vpc_id
 
   health_check {
-    path                = "/"
+    path                = "/health"
     healthy_threshold   = 2
     unhealthy_threshold = 3
     timeout             = 5
@@ -146,6 +152,24 @@ resource "aws_ecs_task_definition" "app" {
           awslogs-stream-prefix = "ecs"
         }
       }
+      environment = [
+        {
+          name  = "APP_NAME"
+          value = "observable-demo-app"
+        },
+        {
+          name  = "APP_ENV"
+          value = local.app_env
+        },
+        {
+          name  = "APP_VERSION"
+          value = local.app_version
+        },
+        {
+          name  = "APP_IMAGE"
+          value = var.container_image
+        }
+      ]
     }
   ])
 
