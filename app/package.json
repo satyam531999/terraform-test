@@ -1,6 +1,6 @@
 {
   "name": "observable-demo-app",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Small observable demo service for ECS, ALB, and future Dynatrace monitoring",
   "main": "server.js",
   "scripts": {
