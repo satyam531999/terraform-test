@@ -1,3 +1,4 @@
+// Observable demo app with health, latency, error, and structured logging endpoints
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
